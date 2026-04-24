@@ -137,20 +137,18 @@ async function _atualizarQR(id) {
 }
 
 function _gerarQR(id) {
-    // Corrigido: ENV.BASE_URL (era BASE_URL — variável inexistente)
     const url = `${ENV.BASE_URL}/registrar.html?id=${id}`
 
     const el = document.createElement("div")
-    el.style.cssText = "position:absolute;left:-9999px;top:-9999px;"
     document.body.appendChild(el)
 
-    try {
-        new QRCode(el, { text: url, width: 200, height: 200 })
-        const canvas = el.querySelector("canvas")
-        return canvas?.toDataURL() || ""
-    } finally {
-        el.remove()
-    }
+    new QRCode(el, { text: url, width: 200, height: 200 })
+
+    const canvas = el.querySelector("canvas")
+    const img = canvas?.toDataURL("image/png") || ""
+
+    el.remove()
+    return img
 }
 
 // ================= VALIDATION =================
