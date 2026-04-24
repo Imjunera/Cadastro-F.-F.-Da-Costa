@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Leitor — Colégio Antônio F.F da Costa</title>
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a6641">
+
+<link rel="stylesheet" href="/assets/css/style.css">
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<link rel="icon" href="/assets/images/lllogo.png" type="image/png">
+<script src="/assets/js/config.js" defer></script>
+<script src="/assets/js/notifications.js" defer></script>
+<script src="/assets/js/modules/scanner-visual.js" defer></script>
+<script src="/assets/js/modules/leitor.js" defer></script>
+<script src="/assets/js/main.js" defer></script>
+
+</head>
+
+<body>
+
+<header class="header" role="banner">
+    <div class="header-left">
+        <img src="/assets/images/logo.png" class="logo" alt="Logo Colégio Antônio Costa" width="44" height="44">
+        <div class="header-text">
+            <span class="header-title">Colégio Estadual Desembargador</span>
+            <span class="header-sub">Antônio F. F. da Costa — Icaraíma / PR</span>
+        </div>
+    </div>
+
+    <nav class="header-nav" aria-label="Navegação principal">
+        <a href="index.html">Cadastro</a>
+        <a href="leitor.html" class="ativo" aria-current="page">Leitor</a>
+        <a href="historico.html">Histórico</a>
+        <a href="analise.html">Análise</a>
+    </nav>
+</header>
+
+<main class="container fade-in">
+
+    <section class="page-header">
+        <h1 class="page-title">Controle de Presença</h1>
+        <p class="page-sub" id="dataHoje"></p>
+    </section>
+
+    <div class="turno-banner" id="turnoBanner" role="status" aria-live="polite">
+        <span id="turnoTxt">Carregando...</span>
+        <span class="horario-chip" id="relogioChip" aria-label="Horário atual"></span>
+    </div>
+
+    <section class="stats-row" aria-label="Resumo do dia">
+        <div class="stat-card">
+            <span class="stat-label">Presentes</span>
+            <strong class="stat-value" id="totalPresentes">0</strong>
+        </div>
+
+        <div class="stat-card danger">
+            <span class="stat-label">Atrasos</span>
+            <strong class="stat-value" id="totalAtrasados">0</strong>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-label">Última entrada</span>
+            <span class="stat-value small" id="ultimaEntrada">—</span>
+        </div>
+
+        <div class="stat-card">
+            <span class="stat-label">Turno</span>
+            <span class="stat-value small" id="turnoAtualStat">—</span>
+        </div>
+    </section>
+
+    <div class="leitor-grid">
+
+        <!-- SCANNER -->
+        <div class="card scanner-card">
+
+            <div class="card-header">
+                <h2>Scanner</h2>
+            </div>
+
+            <div class="scanner-wrap" id="scannerWrap" role="region" aria-label="Câmera do scanner QR">
+
+                <div id="reader" aria-hidden="true"></div>
+                <canvas id="scannerCanvas" aria-hidden="true"></canvas>
+
+                <div class="scan-confirm-overlay" id="scanConfirmOverlay" aria-hidden="true"></div>
+
+                <!-- Classe corrigida: scanner-idle (alinhado ao CSS) -->
+                <div class="scanner-idle" id="scannerIdle">
+                    <div class="scanner-idle-icon" aria-hidden="true">📷</div>
+                    <p>Câmera desativada</p>
+                    <button class="btn primary" id="btnStartCamera" type="button">
+                        Ativar câmera
+                    </button>
+                </div>
+
+            </div>
+
+            <p class="scanner-status" id="scannerStatus" role="status" aria-live="polite">
+                Aguardando ativação
+            </p>
+
+            <button class="btn secondary full" id="btnExportar" type="button">
+                Exportar presenças
+            </button>
+
+        </div>
+
+        <!-- LISTA -->
+        <div class="card">
+
+            <div class="card-header">
+                <h2><span class="live-dot" aria-hidden="true"></span> Chegadas</h2>
+                <button class="btn sm" id="btnRefresh" type="button">Atualizar</button>
+            </div>
+
+            <div class="table-scroll">
+                <table class="table" aria-label="Lista de presenças do dia">
+                    <thead>
+                        <tr>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Turma</th>
+                            <th scope="col">Horário</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="listaPresencas">
+                        <tr>
+                            <td colspan="4" class="table-empty">
+                                Nenhuma presença
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+
+    </div>
+
+</main>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalNome">
+    <div class="modal-card">
+
+        <div id="modalIcon" class="modal-icon" aria-hidden="true"></div>
+        <p id="modalNome" class="modal-title"></p>
+        <p id="modalInfo" class="modal-sub"></p>
+        <span id="modalBadge" class="modal-badge"></span>
+
+        <button id="modalClose" class="btn ghost full" type="button">
+            Fechar
+        </button>
+
+    </div>
+</div>
+
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("../service-worker.js").catch(() => {})
+    })
+}
+</script>
+
+</body>
+</html>

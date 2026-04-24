@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrando presença...</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="icon" href="/assets/images/lllogo.png" type="image/png">
+    <style>
+        /* Layout exclusivo desta página */
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1.5rem;
+            background: var(--fundo);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-brand">
+        <img src="logo.png" class="logo" alt="Logo Colégio Antônio Costa">
+        <div>
+            <span class="header-brand-nome">Colégio Antônio Costa</span>
+            <span class="header-brand-sub">Sistema de Gestão Escolar</span>
+        </div>
+    </div>
+
+    <div class="reg-card" id="card">
+        <div class="reg-icon carregando">⏳</div>
+        <p class="reg-nome">Aguarde...</p>
+        <p class="reg-info">Verificando presença</p>
+        <p class="reg-escola">Colégio Antônio Costa</p>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        function agora() {
+            return new Date().toLocaleTimeString("pt-BR", {
+                hour: "2-digit", minute: "2-digit", second: "2-digit"
+            });
+        }
+
+        function hoje() {
+            return new Date().toISOString().split("T")[0];
+        }
+
+        function mostrar({ estado, nome, turma, turno, extra }) {
+            const icones = { sucesso: "✓", duplicado: "!", erro: "✕" };
+            const textos = {
+                sucesso:   "Presença registrada com sucesso!",
+                duplicado: "Você já registrou presença neste turno.",
+                erro:      "Aluno não encontrado no sistema.",
+            };
+
+            document.getElementById("card").innerHTML = `
+                <div class="reg-icon ${estado}">${icones[estado]}</div>
+                <p class="reg-nome">${nome || "—"}</p>
+                <p class="reg-info">${turma ? `Turma: ${turma} — ${turno}` : ""}</p>
+                <span class="reg-badge ${estado}">${textos[estado]}</span><br>
+                ${estado === "sucesso" ? `<span class="reg-horario">⏰ ${agora()}</span><br>` : ""}
+                ${extra ? `<div class="reg-fora">${extra}</div>` : ""}
+                <p class="reg-escola">Colégio Antônio Costa</p>
+            `;
+        }
+
+        async function registrar() {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get("id");
+
+            if (!id) {
+                mostrar({ estado: "erro" });
+                return;
+            }
+
+            const turno = turnoAtual();
+            if (!turno) {
+                document.getElementById("card").innerHTML = `
+                    <div class="reg-icon duplicado">🌙</div>
+                    <p class="reg-nome">Fora do horário</p>
+                    <p class="reg-info">Não há turno ativo no momento.</p>
+                    <div class="reg-fora">O registro de presença só é permitido durante os turnos de aula.</div>
+                    <p class="reg-escola">Colégio Antônio Costa</p>
+                `;
+                return;
+            }
+
+            try {
+                const { data: aluno, error: errAluno } = await db
+                    .from("alunos")
+                    .select("id, nome, turma, turno")
+                    .eq("id", id)
+                    .single();
+
+                if (errAluno || !aluno) {
+                    mostrar({ estado: "erro" });
+                    return;
+                }
+
+                const { inicio, fim } = intervaloPorTurno(turno);
+                const { data: existe } = await db
+                    .from("presencas")
+                    .select("id")
+                    .eq("aluno_id", id)
+                    .gte("horario_chegada", inicio)
+                    .lte("horario_chegada", fim);
+
+                if (existe && existe.length > 0) {
+                    mostrar({ estado: "duplicado", nome: aluno.nome, turma: aluno.turma, turno: aluno.turno });
+                    return;
+                }
+
+                const { error: errIns } = await db
+                    .from("presencas")
+                    .insert([{ aluno_id: id }]);
+
+                if (errIns) throw errIns;
+
+                mostrar({ estado: "sucesso", nome: aluno.nome, turma: aluno.turma, turno: aluno.turno });
+
+            } catch (err) {
+                console.error(err);
+                mostrar({ estado: "erro" });
+            }
+        }
+
+        registrar();
+    </script>
+</body>
+</html>

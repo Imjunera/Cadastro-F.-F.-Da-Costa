@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Histórico — Colégio Antônio F. F. da Costa</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="icon" href="/assets/images/lllogo.png" type="image/png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="/assets/js/config.js" defer></script>
+<script src="/assets/js/notifications.js" defer></script>
+<script src="/assets/js/main.js" defer></script>
+<script src="/assets/js/modules/historico.js" defer></script>
+</head>
+
+<body>
+
+<header class="header" role="banner">
+    <div class="header-left">
+        <img src="/assets/images/logo.png" class="logo" alt="Logo Colégio Antônio Costa" width="44" height="44">
+        <div class="header-text">
+            <span class="header-title">Colégio Estadual Desembargador</span>
+            <span class="header-sub">Antônio F. F. da Costa — Icaraíma / PR</span>
+        </div>
+    </div>
+    <nav class="header-nav" aria-label="Navegação principal">
+        <a href="index.html">Cadastro</a>
+        <a href="leitor.html">Leitor</a>
+        <a href="historico.html" class="ativo" aria-current="page">Histórico</a>
+        <a href="analise.html">Análise</a>
+    </nav>
+</header>
+
+<main class="container fade-in">
+
+    <section class="page-header">
+        <h1 class="page-title">Histórico de Presenças</h1>
+        <p class="page-sub">Relatórios por dia e turno registrados</p>
+    </section>
+
+    <!-- STATS -->
+    <section class="stats-row" aria-label="Resumo geral">
+        <div class="stat-card">
+            <span class="stat-label">Dias</span>
+            <strong class="stat-value" id="totalDias">—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Registros</span>
+            <strong class="stat-value" id="totalRegistros">—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Primeiro dia</span>
+            <strong class="stat-value pequeno" id="primeiroDia">—</strong>
+        </div>
+    </section>
+
+    <!-- TOOLBAR -->
+    <section class="toolbar" aria-label="Filtros">
+        <div class="toolbar-group">
+            <label for="filtroData">Data</label>
+            <input type="date" id="filtroData" class="input" aria-label="Filtrar por data">
+        </div>
+        <div class="toolbar-actions">
+            <label for="filtroTurno" class="sr-only">Turno</label>
+            <select id="filtroTurno" class="select" aria-label="Filtrar por turno">
+                <option value="">Todos os turnos</option>
+                <option value="Manhã">Manhã</option>
+                <option value="Tarde">Tarde</option>
+                <option value="Noite">Noite</option>
+            </select>
+            <button class="btn ghost" id="btnLimpar" type="button">Limpar</button>
+        </div>
+    </section>
+
+    <!-- LISTA DE HISTÓRICO -->
+    <section id="historicoContainer" class="list-container"
+             aria-live="polite" aria-label="Histórico de presenças">
+        <div class="empty">
+            <div class="empty-icon" aria-hidden="true">⏳</div>
+            <p>Carregando histórico...</p>
+        </div>
+    </section>
+
+</main>
+
+<!-- MODAL DE DETALHE DO DIA/TURNO -->
+<div class="modal-overlay" id="modalOverlay"
+     role="dialog" aria-modal="true" aria-labelledby="modalTituloHist">
+    <div class="modal-card" style="text-align:left; max-width:540px;">
+
+        <div class="modal-header">
+            <strong id="modalTituloHist"></strong>
+            <button class="modal-close" id="modalClose" type="button" aria-label="Fechar modal">✕</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="table-wrapper">
+                <table class="table" aria-label="Lista de presentes">
+                    <thead>
+                        <tr>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Turma</th>
+                            <th scope="col">Horário</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalListaHist"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn primary" id="btnPDF" type="button">Gerar PDF</button>
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

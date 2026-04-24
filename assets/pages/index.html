@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Alunos — Colégio Antônio F.F da Costa</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="icon" href="/assets/images/lllogo.png" type="image/png">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <script src="/assets/js/config.js" defer></script>
+    <script src="/assets/js/notifications.js" defer></script>
+    <script src="/assets/js/main.js" defer></script>
+    <script src="/assets/js/modules/cadastro.js" defer></script>
+</head>
+
+<body>
+
+<header class="header" role="banner">
+    <div class="header-left">
+        <img src="/assets/images/logo.png" class="logo" alt="Logo Colégio Antônio Costa" width="44" height="44">
+        <div class="header-text">
+            <span class="header-title">Colégio Estadual Desembargador</span>
+            <span class="header-sub">Antônio F. F. da Costa — Icaraíma / PR</span>
+        </div>
+    </div>
+    <nav class="header-nav" aria-label="Navegação principal">
+        <a href="index.html" class="ativo" aria-current="page">Cadastro</a>
+        <a href="leitor.html">Leitor</a>
+        <a href="historico.html">Histórico</a>
+        <a href="analise.html">Análise</a>
+    </nav>
+</header>
+
+<main class="container fade-in">
+
+    <section class="page-header">
+        <h1 class="page-title">Alunos</h1>
+        <p class="page-sub">Gerencie os alunos cadastrados no sistema</p>
+    </section>
+
+    <section class="stats-row" aria-label="Resumo">
+        <div class="stat-card">
+            <span class="stat-label">Total</span>
+            <strong class="stat-value" id="totalAlunos">—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Hoje</span>
+            <strong class="stat-value" id="presentesHoje">—</strong>
+        </div>
+    </section>
+
+    <!-- FORMULÁRIO -->
+    <section class="card">
+        <div class="card-header">
+            <h2 id="tituloForm">Novo aluno</h2>
+        </div>
+
+        <form id="formAluno" class="form-grid" novalidate>
+
+            <div class="form-group">
+                <label for="nome">Nome completo</label>
+                <input type="text" id="nome" name="nome" autocomplete="name"
+                       placeholder="Nome do aluno" required>
+            </div>
+
+            <div class="form-group">
+                <label for="idade">Idade</label>
+                <input type="number" id="idade" name="idade"
+                       min="1" max="99" placeholder="Ex: 15" required>
+            </div>
+
+            <!-- TURMA: Ensino Fundamental (6º–9º, turmas A–D) e Médio (modalidades) -->
+            <div class="form-group">
+                <label for="turma">Turma</label>
+                <select id="turma" name="turma" required>
+                    <option value="">Selecione a turma</option>
+
+                    <optgroup label="── Ensino Fundamental ──────────">
+                        <option value="6º A">6º A</option>
+                        <option value="6º B">6º B</option>
+                        <option value="6º C">6º C</option>
+                        <option value="6º D">6º D</option>
+
+                        <option value="7º A">7º A</option>
+                        <option value="7º B">7º B</option>
+                        <option value="7º C">7º C</option>
+                        <option value="7º D">7º D</option>
+
+                        <option value="8º A">8º A</option>
+                        <option value="8º B">8º B</option>
+                        <option value="8º C">8º C</option>
+                        <option value="8º D">8º D</option>
+
+                        <option value="9º A">9º A</option>
+                        <option value="9º B">9º B</option>
+                        <option value="9º C">9º C</option>
+                        <option value="9º D">9º D</option>
+                    </optgroup>
+
+                    <optgroup label="── Ensino Médio ────────────────">
+                        <option value="1º Téc. Sistemas">1º Téc. Sistemas</option>
+                        <option value="1º Téc. Agronegócio">1º Téc. Agronegócio</option>
+                        <option value="1º NEM">1º NEM</option>
+                        <option value="1º EMP">1º EMP</option>
+
+                        <option value="2º Téc. Sistemas">2º Téc. Sistemas</option>
+                        <option value="2º Téc. Agronegócio">2º Téc. Agronegócio</option>
+                        <option value="2º NEM">2º NEM</option>
+                        <option value="2º EMP">2º EMP</option>
+
+                        <option value="3º Téc. Sistemas">3º Téc. Sistemas</option>
+                        <option value="3º Téc. Agronegócio">3º Téc. Agronegócio</option>
+                        <option value="3º NEM">3º NEM</option>
+                        <option value="3º EMP">3º EMP</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="turno">Turno</label>
+                <select id="turno" name="turno" required>
+                    <option value="">Selecione o turno</option>
+                    <option value="Manhã">Manhã</option>
+                    <option value="Tarde">Tarde</option>
+                    <option value="Noite">Noite</option>
+                </select>
+            </div>
+
+        </form>
+
+        <div class="form-actions">
+            <button class="btn primary" id="btnSalvar" type="button">Salvar aluno</button>
+            <button class="btn ghost"   id="btnCancelar" type="button">Cancelar</button>
+        </div>
+    </section>
+
+    <!-- TOOLBAR -->
+    <section class="toolbar" aria-label="Filtros e ações">
+        <div class="toolbar-group">
+            <label for="busca" class="sr-only">Buscar aluno</label>
+            <input type="search" id="busca" placeholder="Buscar aluno..." class="input"
+                   aria-label="Buscar aluno">
+        </div>
+        <div class="toolbar-actions">
+            <button class="btn secondary" id="btnRelatorio" type="button">Relatório</button>
+            <button class="btn danger"    id="btnApagar"    type="button">Apagar todos</button>
+        </div>
+    </section>
+
+    <!-- TABELA -->
+    <section class="table-wrapper" aria-label="Lista de alunos">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th scope="col">Nome</th>
+                    <th scope="col">Idade</th>
+                    <th scope="col">Turma</th>
+                    <th scope="col">Turno</th>
+                    <th scope="col">QR</th>
+                    <th scope="col">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="listaAlunos">
+                <tr>
+                    <td colspan="6" class="table-empty">Carregando...</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+</main>
+
+</body>
+</html>

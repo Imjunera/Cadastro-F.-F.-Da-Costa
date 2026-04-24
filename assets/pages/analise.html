@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análise — Colégio Antônio F.F da Costa</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="icon" href="/assets/images/lllogo.png" type="image/png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="/assets/js/config.js" defer></script>
+<script src="/assets/js/notifications.js" defer></script>
+<script src="/assets/js/main.js" defer></script>
+<script src="/assets/js/modules/analise.js" defer></script>
+</head>
+
+<body>
+
+<header class="header" role="banner">
+    <div class="header-left">
+        <img src="/assets/images/logo.png" class="logo" alt="Logo Colégio Antônio Costa" width="44" height="44">
+        <div class="header-text">
+            <span class="header-title">Colégio Estadual Desembargador</span>
+            <span class="header-sub">Antônio F. F. da Costa — Icaraíma / PR</span>
+        </div>
+    </div>
+    <nav class="header-nav" aria-label="Navegação principal">
+        <a href="index.html">Cadastro</a>
+        <a href="leitor.html">Leitor</a>
+        <a href="historico.html">Histórico</a>
+        <a href="analise.html" class="ativo" aria-current="page">Análise</a>
+    </nav>
+</header>
+
+<main class="container fade-in">
+
+    <section class="page-header">
+        <h1 class="page-title">Painel de Análise</h1>
+        <p class="page-sub">Frequência, atrasos e desempenho por aluno</p>
+    </section>
+
+    <!-- TOOLBAR DE FILTROS -->
+    <section class="toolbar" aria-label="Filtros">
+
+        <div class="toolbar-group">
+            <label for="filtroInicio">De</label>
+            <input type="date" id="filtroInicio" class="input" aria-label="Data inicial">
+
+            <label for="filtroFim">Até</label>
+            <input type="date" id="filtroFim" class="input" aria-label="Data final">
+        </div>
+
+        <div class="toolbar-actions">
+
+            <label for="filtroTurno" class="sr-only">Turno</label>
+            <select id="filtroTurno" class="select" aria-label="Filtrar por turno">
+                <option value="">Todos os turnos</option>
+                <option value="Manhã">Manhã</option>
+                <option value="Tarde">Tarde</option>
+                <option value="Noite">Noite</option>
+            </select>
+
+            <button class="btn primary" id="btnFiltrar" type="button">Filtrar</button>
+            <button class="btn ghost"   id="btnLimpar"  type="button">Limpar</button>
+        </div>
+
+    </section>
+
+    <!-- STATS GLOBAIS -->
+    <section class="stats-row" id="statsGlobais" aria-label="Estatísticas gerais">
+        <div class="stat-card">
+            <span class="stat-label">Presenças</span>
+            <strong class="stat-value" id="statTotal">—</strong>
+        </div>
+        <div class="stat-card danger">
+            <span class="stat-label">Atrasos</span>
+            <strong class="stat-value" id="statAtrasos">—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Pontualidade</span>
+            <strong class="stat-value" id="statPontualidade">—</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Alunos</span>
+            <strong class="stat-value" id="statAlunos">—</strong>
+        </div>
+    </section>
+
+    <!-- GRÁFICOS -->
+    <div class="grid-2">
+
+        <div class="card">
+            <h2 class="card-title">Presenças no tempo</h2>
+            <canvas id="chartTempo" aria-label="Gráfico de presenças ao longo do tempo"></canvas>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Presentes vs Atrasos</h2>
+            <canvas id="chartPizza" aria-label="Gráfico pizza: presentes vs atrasados"></canvas>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Presenças por turno</h2>
+            <canvas id="chartTurno" aria-label="Gráfico de presenças por turno"></canvas>
+        </div>
+
+        <div class="card">
+            <h2 class="card-title">Atrasos por turno</h2>
+            <canvas id="chartAtrasoTurno" aria-label="Gráfico de atrasos por turno"></canvas>
+        </div>
+
+    </div>
+
+    <!-- TABELA POR ALUNO -->
+    <section class="card">
+
+        <div class="card-header">
+            <h2>Frequência por aluno</h2>
+            <div class="table-controls">
+                <label for="buscaAluno" class="sr-only">Buscar aluno</label>
+                <input type="search" id="buscaAluno"
+                       placeholder="Buscar..." class="input sm"
+                       aria-label="Buscar aluno">
+
+                <label for="ordenarPor" class="sr-only">Ordenar por</label>
+                <select id="ordenarPor" class="select sm" aria-label="Ordenar por">
+                    <option value="presencas">Mais presenças</option>
+                    <option value="atrasos">Mais atrasos</option>
+                    <option value="nome">Nome (A–Z)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-wrapper">
+            <table class="table" aria-label="Frequência por aluno">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Nome</th>
+                        <th scope="col">Turma</th>
+                        <th scope="col">Turno</th>
+                        <th scope="col">Presenças</th>
+                        <th scope="col">Atrasos</th>
+                        <th scope="col">Pontualidade</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaAlunos">
+                    <tr>
+                        <td colspan="7" class="table-empty">Carregando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </section>
+
+</main>
+
+</body>
+</html>
