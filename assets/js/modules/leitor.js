@@ -284,29 +284,8 @@ async function _registrar(id) {
             return false
         }
 
-        // 🔴 1. VALIDAR TURNO PRIMEIRO (antes de qualquer coisa)
-        const turnoAtivo = turnoAtual()
-
-        if (!turnoAtivo || aluno.turno !== turnoAtivo.nome) {
-            mostrarModal({
-                tipo: "erro",
-                nome: aluno.nome,
-                turma: aluno.turma,
-                turno: aluno.turno
-            })
-
-            Notif.aviso(
-                "Turno incorreto",
-                `${aluno.nome} é do turno ${aluno.turno}, sistema está em ${turnoAtivo?.nome ?? "nenhum"}`
-            )
-
-            ScannerVisual.confirm("erro")
-            return false
-        }
-
         const hoje = new Date().toISOString().split("T")[0]
 
-        // 🟡 2. VALIDAR DUPLICADO (agora sim faz sentido)
         const { data: existe } = await db
             .from("presencas")
             .select("id")
@@ -315,48 +294,26 @@ async function _registrar(id) {
             .lte("horario_chegada", hoje + "T23:59:59")
 
         if (existe && existe.length > 0) {
-            mostrarModal({
-                tipo: "duplicado",
-                nome: aluno.nome,
-                turma: aluno.turma,
-                turno: aluno.turno
-            })
-
+            mostrarModal({ tipo: "duplicado", nome: aluno.nome, turma: aluno.turma, turno: aluno.turno })
             ScannerVisual.confirm("duplicado")
             return false
         }
 
-        // 🟢 3. CALCULAR STATUS
         const status = calcularStatus(aluno.turno)
 
-        // 🟢 4. INSERIR
         const { error: errIns } = await db
             .from("presencas")
             .insert([{ aluno_id: id, status }])
 
         if (errIns) throw errIns
 
-        // 🟢 5. FEEDBACK
-        mostrarModal({
-            tipo: "sucesso",
-            nome: aluno.nome,
-            turma: aluno.turma,
-            turno: aluno.turno,
-            status
-        })
-
+        mostrarModal({ tipo: "sucesso", nome: aluno.nome, turma: aluno.turma, turno: aluno.turno, status })
         ScannerVisual.confirm(status)
 
         if (status === "atrasado") {
-            Notif.aviso(
-                `${aluno.nome} — Atrasado`,
-                `Chegou após o limite do turno ${aluno.turno}.`
-            )
+            Notif.aviso(`${aluno.nome} — Atrasado`, `Chegou após o limite do turno ${aluno.turno}.`)
         } else {
-            Notif.sucesso(
-                "Presença registrada",
-                `${aluno.nome} chegou no horário.`
-            )
+            Notif.sucesso("Presença registrada", `${aluno.nome} chegou no horário.`)
         }
 
         carregarPresencas()
@@ -486,25 +443,12 @@ async function iniciarCamera() {
                 experimentalFeatures: { useBarCodeDetectorIfSupported: true }
             },
             // onScanSuccess alimenta o visual manualmente
-            async (texto, result) => {
-                let points = null
-
-                if (result?.decodedResult?.result?.points) {
-                    points = result.decodedResult.result.points
-                } else if (result?.result?.points) {
-                    points = result.result.points
-                }
-
-                const box = points ? _converterBox(points) : null
-
-                ScannerVisual.update(box)
-
-                // NÃO bloqueia o loop do scanner
-                onScanSuccess(texto)
+            async (texto) => {
+                // Passa o decode para o ScannerVisual antes do registro
+                await onScanSuccess(texto)
             },
-            () => {
-                ScannerVisual.update(null)
-            }
+            // onScanFailure (frame sem QR) — atualiza o módulo visual
+            () => { ScannerVisual.update(null) }
         )
 
         // Conecta o ScannerVisual ao vídeo gerado pelo html5-qrcode
@@ -533,27 +477,6 @@ async function iniciarCamera() {
             Notif.erro("Erro na câmera", statusEl.textContent.replace("❌ ", ""))
         }
         btn.disabled = false
-    }
-}
-
-function _converterBox(points) {
-    if (!points || points.length < 4) return null
-
-    const xs = points.map(p => p.x).filter(n => typeof n === "number")
-    const ys = points.map(p => p.y).filter(n => typeof n === "number")
-
-    if (xs.length < 4 || ys.length < 4) return null
-
-    const minX = Math.min(...xs)
-    const minY = Math.min(...ys)
-    const maxX = Math.max(...xs)
-    const maxY = Math.max(...ys)
-
-    return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
     }
 }
 
