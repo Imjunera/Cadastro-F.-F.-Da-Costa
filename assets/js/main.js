@@ -19,6 +19,9 @@ function _bindCadastro() {
     _el("busca").oninput       = _debounce(_renderLista, 200)
     _el("btnRelatorio").onclick = _gerarRelatorio
     _el("btnApagar").onclick   = _apagarTodos
+    _el("nome").addEventListener("input", e => {
+    e.target.value = e.target.value.toUpperCase()
+})
 
     // Delegação de clique para editar/deletar na tabela
     // Escopo restrito ao tbody para não disparar em cliques fora
@@ -170,7 +173,7 @@ function _validar() {
 
 function _getForm() {
     return {
-        nome:  _el("nome").value.trim(),
+        nome:  _el("nome").value.trim().toUpperCase(),
         idade: parseInt(_el("idade").value, 10),
         turma: _el("turma").value,
         turno: _el("turno").value

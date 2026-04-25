@@ -443,12 +443,17 @@ async function iniciarCamera() {
                 experimentalFeatures: { useBarCodeDetectorIfSupported: true }
             },
             // onScanSuccess alimenta o visual manualmente
-            async (texto) => {
-                // Passa o decode para o ScannerVisual antes do registro
-                await onScanSuccess(texto)
-            },
-            // onScanFailure (frame sem QR) — atualiza o módulo visual
-            () => { ScannerVisual.update(null) }
+                async (texto, result) => {
+                    const box = result?.result?.points
+                        ? _converterBox(result.result.points)
+                        : null
+
+                    ScannerVisual.update(box)
+                    await onScanSuccess(texto)
+                },
+                () => {
+                    ScannerVisual.update(null)
+                }
         )
 
         // Conecta o ScannerVisual ao vídeo gerado pelo html5-qrcode
@@ -477,6 +482,25 @@ async function iniciarCamera() {
             Notif.erro("Erro na câmera", statusEl.textContent.replace("❌ ", ""))
         }
         btn.disabled = false
+    }
+}
+
+function _converterBox(points) {
+    if (!points || points.length < 4) return null
+
+    const xs = points.map(p => p.x)
+    const ys = points.map(p => p.y)
+
+    const minX = Math.min(...xs)
+    const minY = Math.min(...ys)
+    const maxX = Math.max(...xs)
+    const maxY = Math.max(...ys)
+
+    return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
     }
 }
 
