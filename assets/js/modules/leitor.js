@@ -1,4 +1,6 @@
 // leitor.js — controle de presença com detecção de atraso
+// Refatorado: validação de turno fail-fast, extração segura de bounding box,
+// callback não-bloqueante, pipeline de registro corrigido.
 
 // ===================== LIMITES DE ATRASO POR TURNO =====================
 const LIMITES_ATRASO = {
@@ -23,7 +25,6 @@ function _atualizarRelogio() {
     })
 }
 
-// IIFE movida para dentro do DOMContentLoaded — evita rodar antes do DOM
 function _iniciarInfo() {
     const hoje = new Date()
     const opts = { weekday: "long", day: "numeric", month: "long", year: "numeric" }
@@ -37,7 +38,7 @@ function _iniciarInfo() {
 
 // ===================== TURNO =====================
 function _atualizarTurnoBanner() {
-    const turno  = turnoAtual()          // alias de config.js
+    const turno  = turnoAtual()
     const banner = document.getElementById("turnoBanner")
     const txt    = document.getElementById("turnoTxt")
     const stat   = document.getElementById("turnoAtualStat")
@@ -62,7 +63,7 @@ function _chaveUltimoTurno() {
 async function _verificarTrocaTurno() {
     _atualizarTurnoBanner()
 
-    const m      = minutosDoDia()     // alias de config.js
+    const m       = minutosDoDia()
     const viradas = [13 * 60, 18 * 60, 24 * 60]
 
     for (const virada of viradas) {
@@ -77,11 +78,9 @@ async function _verificarTrocaTurno() {
 }
 
 async function _limparPresencasTurnoAnterior(virada) {
-    // Usa os mesmos limites do TURNOS de config.js para consistência
     const turno = TURNOS.find(t => t.fim === virada)
     if (!turno) return
 
-    // intervaloPorTurno é alias de config.js (Time.intervalo)
     const intervalo = intervaloPorTurno(turno)
     if (!intervalo) return
 
@@ -102,21 +101,25 @@ async function _limparPresencasTurnoAnterior(virada) {
 }
 
 // ===================== MODAL =====================
-// Timer encapsulado — sem vazamento para window
 let _modalTimer = null
 
-function mostrarModal({ tipo, nome, turma, turno, status }) {
+/**
+ * @param {{ tipo: string, nome?: string, turma?: string, turno?: string, status?: string, texto?: string }} opts
+ * `texto` substitui a mensagem padrão do tipo quando fornecido.
+ */
+function mostrarModal({ tipo, nome, turma, turno, status, texto }) {
     const cfg = {
         sucesso:   {
             icon:  status === "atrasado" ? "⚠" : "✓",
             texto: status === "atrasado" ? "Presença registrada — Atrasado!" : "Presença registrada!"
         },
-        duplicado: { icon: "!", texto: "Já registrado neste turno." },
-        erro:      { icon: "✕", texto: "Aluno não encontrado." }
+        duplicado: { icon: "!", texto: "Já registrado neste turno."   },
+        turno:     { icon: "⊘", texto: "Turno incorreto."            },
+        erro:      { icon: "✕", texto: texto ?? "Aluno não encontrado." }
     }
-    const c = cfg[tipo] || cfg.erro
+    const c = cfg[tipo] ?? cfg.erro
 
-    // "atrasado" como variante visual do sucesso
+    // Variante visual: "atrasado" herda aparência de "sucesso"
     const iconClass = (tipo === "sucesso" && status === "atrasado") ? "atrasado" : tipo
 
     const iconEl  = document.getElementById("modalIcon")
@@ -127,7 +130,7 @@ function mostrarModal({ tipo, nome, turma, turno, status }) {
 
     if (!iconEl || !nomeEl || !infoEl || !badgeEl || !overlay) return
 
-    iconEl.className  = `modal-icon ${iconClass}`
+    iconEl.className   = `modal-icon ${iconClass}`
     iconEl.textContent = c.icon
     nomeEl.textContent = nome || "—"
     nomeEl.className   = `modal-title ${tipo === "sucesso" ? (status === "atrasado" ? "nome-atrasado" : "nome-presente") : ""}`
@@ -157,11 +160,11 @@ function _formatarHora(iso) {
 }
 
 async function carregarPresencas() {
-    const turno     = turnoAtual()
-    const tbody     = document.getElementById("listaPresencas")
-    const totalEl   = document.getElementById("totalPresentes")
-    const ultimaEl  = document.getElementById("ultimaEntrada")
-    const atrasEl   = document.getElementById("totalAtrasados")
+    const turno    = turnoAtual()
+    const tbody    = document.getElementById("listaPresencas")
+    const totalEl  = document.getElementById("totalPresentes")
+    const ultimaEl = document.getElementById("ultimaEntrada")
+    const atrasEl  = document.getElementById("totalAtrasados")
 
     if (!tbody) return
 
@@ -236,41 +239,69 @@ async function carregarPresencas() {
 let _ultimoId    = null
 let _registrando = false
 
+/**
+ * Extrai o ID do aluno de múltiplos formatos de QR suportados:
+ *   - URL com query param `id`
+ *   - Prefixo "ID: <valor>"
+ *   - UUID puro
+ * Retorna null se nenhum formato for reconhecido.
+ * @param {string} texto
+ * @returns {string|null}
+ */
+function _extrairId(texto) {
+    if (typeof texto !== "string" || !texto.trim()) return null
+
+    // 1. URL com ?id=
+    try {
+        const url = new URL(texto.trim())
+        const id  = url.searchParams.get("id")
+        if (id) return id
+    } catch { /* não é URL */ }
+
+    // 2. Prefixo "ID: <valor>"
+    const mPrefixo = texto.match(/ID[:\s]+(\S+)/i)
+    if (mPrefixo) return mPrefixo[1]
+
+    // 3. UUID puro
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (UUID.test(texto.trim())) return texto.trim()
+
+    return null
+}
+
 async function onScanSuccess(texto) {
     if (_registrando) return
 
-    let id = null
+    const id = _extrairId(texto)
 
-    try {
-        const url = new URL(texto)
-        id = url.searchParams.get("id")
-    } catch { /* não é uma URL válida */ }
-
-    if (!id) {
-        const m = texto.match(/ID[:\s]+(\S+)/i)
-        if (m) id = m[1]
-    }
-
-    if (!id) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-        if (uuidRegex.test(texto.trim())) id = texto.trim()
-    }
-
-    if (!id) { console.warn("QR lido mas ID não encontrado:", texto); return }
+    if (!id) return
     if (id === _ultimoId) return
 
     _registrando = true
-    const ok = await _registrar(id)
-    _registrando = false
-
-    if (ok) {
-        _ultimoId = id
-        setTimeout(() => { _ultimoId = null }, 5000)
+    try {
+        const ok = await _registrar(id)
+        if (ok) {
+            _ultimoId = id
+            setTimeout(() => { _ultimoId = null }, 5000)
+        }
+    } finally {
+        _registrando = false
     }
 }
 
+/**
+ * Pipeline de registro estrito:
+ *   1. Busca aluno
+ *   2. Valida turno (fail-fast — bloqueia tudo se incorreto)
+ *   3. Verifica duplicata dentro do turno ativo
+ *   4. Insere presença
+ *
+ * @param {string} id UUID do aluno
+ * @returns {Promise<boolean>}
+ */
 async function _registrar(id) {
     try {
+        // ── Passo 1: Buscar aluno ──────────────────────────────────────────────
         const { data: aluno, error: errAluno } = await db
             .from("alunos")
             .select("id, nome, turma, turno")
@@ -279,19 +310,56 @@ async function _registrar(id) {
 
         if (errAluno || !aluno) {
             mostrarModal({ tipo: "erro" })
-            Notif.erro("Aluno não encontrado", "ID não corresponde a nenhum aluno.")
+            Notif.erro("Aluno não encontrado", "ID não corresponde a nenhum aluno cadastrado.")
             ScannerVisual.confirm("erro")
             return false
         }
 
-        const hoje = new Date().toISOString().split("T")[0]
+        // ── Passo 2: Validação de turno (FAIL-FAST) ───────────────────────────
+        // Nenhuma operação adicional ocorre se o turno for inválido.
+        const turno = turnoAtual()
 
-        const { data: existe } = await db
+        if (!turno) {
+            mostrarModal({
+                tipo: "erro",
+                nome:  aluno.nome,
+                turma: aluno.turma,
+                turno: aluno.turno,
+                texto: "Fora do horário de aulas."
+            })
+            Notif.aviso("Fora do horário", "Não há turno ativo no momento. Nenhuma presença registrada.")
+            ScannerVisual.confirm("erro")
+            return false
+        }
+
+        if (aluno.turno !== turno.nome) {
+            mostrarModal({
+                tipo:  "turno",
+                nome:  aluno.nome,
+                turma: aluno.turma,
+                turno: aluno.turno
+            })
+            Notif.aviso(
+                "Turno incorreto",
+                `${aluno.nome} pertence ao turno ${aluno.turno}. Turno ativo: ${turno.nome}.`
+            )
+            ScannerVisual.confirm("erro")
+            return false
+        }
+
+        // ── Passo 3: Verificar duplicata no turno ativo ────────────────────────
+        // Usa intervalo do turno (não o dia inteiro) para consistência com carregarPresencas.
+        const { inicio, fim } = intervaloPorTurno(turno)
+
+        const { data: existe, error: errDup } = await db
             .from("presencas")
             .select("id")
             .eq("aluno_id", id)
-            .gte("horario_chegada", hoje + "T00:00:00")
-            .lte("horario_chegada", hoje + "T23:59:59")
+            .gte("horario_chegada", inicio)
+            .lte("horario_chegada", fim)
+            .limit(1)
+
+        if (errDup) throw errDup
 
         if (existe && existe.length > 0) {
             mostrarModal({ tipo: "duplicado", nome: aluno.nome, turma: aluno.turma, turno: aluno.turno })
@@ -299,6 +367,7 @@ async function _registrar(id) {
             return false
         }
 
+        // ── Passo 4: Inserir presença ──────────────────────────────────────────
         const status = calcularStatus(aluno.turno)
 
         const { error: errIns } = await db
@@ -320,8 +389,8 @@ async function _registrar(id) {
         return true
 
     } catch (err) {
-        console.error(err)
-        Notif.erro("Erro ao registrar presença", err.message)
+        console.error("Erro ao registrar presença:", err)
+        Notif.erro("Erro ao registrar presença", err.message ?? "Erro desconhecido.")
         mostrarModal({ tipo: "erro" })
         ScannerVisual.confirm("erro")
         return false
@@ -358,9 +427,9 @@ async function gerarRelatorioPresencas() {
         if (error) throw error
 
         const { jsPDF } = window.jspdf
-        const doc      = new jsPDF()
-        const dataFmt  = new Date().toLocaleDateString("pt-BR")
-        const lista    = data || []
+        const doc       = new jsPDF()
+        const dataFmt   = new Date().toLocaleDateString("pt-BR")
+        const lista     = data || []
         const atrasados = lista.filter(p => p.status === "atrasado").length
 
         doc.setFontSize(16)
@@ -404,9 +473,81 @@ async function gerarRelatorioPresencas() {
 // ===================== CÂMERA =====================
 let _html5QrCode = null
 
+/**
+ * Extrai bounding box normalizada do resultado do html5-qrcode.
+ * Tenta múltiplos caminhos conhecidos na estrutura do resultado.
+ * Retorna null em qualquer falha — nunca lança exceção.
+ *
+ * @param {object} decodedResult
+ * @returns {{ x: number, y: number, width: number, height: number } | null}
+ */
+function _extrairBoundingBox(decodedResult) {
+    try {
+        // html5-qrcode v2.x expõe os pontos em result.result.points
+        // Algumas versões colocam em decodedResult diretamente
+        const points = (
+            decodedResult?.result?.points ??
+            decodedResult?.decodedResult?.result?.points ??
+            null
+        )
+
+        if (!Array.isArray(points) || points.length < 2) return null
+
+        // Aceita tanto {x, y} quanto {X, Y} (variações da API)
+        const xs = points.map(p => p?.x ?? p?.X)
+        const ys = points.map(p => p?.y ?? p?.Y)
+
+        // Rejeita qualquer ponto não-numérico ou infinito
+        if (xs.some(v => typeof v !== "number" || !isFinite(v))) return null
+        if (ys.some(v => typeof v !== "number" || !isFinite(v))) return null
+
+        const minX = Math.min(...xs)
+        const minY = Math.min(...ys)
+        const maxX = Math.max(...xs)
+        const maxY = Math.max(...ys)
+
+        const w = maxX - minX
+        const h = maxY - minY
+
+        // Caixa degenerada (ponto ou linha) — descarta
+        if (w <= 0 || h <= 0) return null
+
+        return { x: minX, y: minY, width: w, height: h }
+
+    } catch {
+        // Estrutura inesperada — nunca deve chegar aqui, mas garantimos
+        return null
+    }
+}
+
+/**
+ * Aplica constraints avançadas de câmera (foco e exposição contínuos).
+ * Degrada graciosamente se o dispositivo não suportar.
+ * @param {HTMLVideoElement} videoEl
+ */
+function _aplicarConstraintsAvancados(videoEl) {
+    try {
+        const stream = videoEl?.srcObject
+        if (!stream || typeof stream.getVideoTracks !== "function") return
+
+        const track = stream.getVideoTracks()[0]
+        if (!track || typeof track.applyConstraints !== "function") return
+
+        track.applyConstraints({
+            advanced: [
+                { focusMode:    "continuous" },
+                { exposureMode: "continuous" }
+            ]
+        }).catch(() => {
+            // Browser não suporta — degradação silenciosa intencional
+        })
+    } catch {
+        // getVideoTracks pode não existir em alguns ambientes — ignora
+    }
+}
+
 async function iniciarCamera() {
     const statusEl = document.getElementById("scannerStatus")
-    // Corrigido: era "btnIniciar" — o HTML usa "btnStartCamera"
     const btn      = document.getElementById("btnStartCamera")
     const idle     = document.getElementById("scannerIdle")
     const wrap     = document.getElementById("scannerWrap")
@@ -420,7 +561,7 @@ async function iniciarCamera() {
     }
 
     try {
-        // Verifica permissão antecipadamente para dar feedback imediato
+        // Verifica permissão de câmera antes de iniciar o html5-qrcode
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
         stream.getTracks().forEach(t => t.stop())
 
@@ -434,7 +575,8 @@ async function iniciarCamera() {
         await _html5QrCode.start(
             { facingMode: "environment" },
             {
-                fps: 20,
+                // 10 FPS: estável, baixo custo de CPU, suficiente para detecção QR
+                fps: 10,
                 qrbox: (w, h) => {
                     const s = Math.floor(Math.min(w, h) * 0.75)
                     return { width: s, height: s }
@@ -442,20 +584,32 @@ async function iniciarCamera() {
                 aspectRatio: 1.0,
                 experimentalFeatures: { useBarCodeDetectorIfSupported: true }
             },
-            // onScanSuccess alimenta o visual manualmente
-            async (texto) => {
-                // Passa o decode para o ScannerVisual antes do registro
-                await onScanSuccess(texto)
+
+            // ── Callback de sucesso ──────────────────────────────────────────
+            // IMPORTANTE: NÃO usar await aqui — o callback não deve bloquear o
+            // render loop do ScannerVisual. onScanSuccess roda em paralelo.
+            (decodedText, decodedResult) => {
+                const box = _extrairBoundingBox(decodedResult)
+                ScannerVisual.update(box)
+
+                // Fire-and-forget: erros capturados internamente em onScanSuccess
+                onScanSuccess(decodedText).catch(err => {
+                    console.error("onScanSuccess falhou inesperadamente:", err)
+                })
             },
-            // onScanFailure (frame sem QR) — atualiza o módulo visual
+
+            // ── Callback de falha (nenhum QR no frame) ───────────────────────
             () => { ScannerVisual.update(null) }
         )
 
-        // Conecta o ScannerVisual ao vídeo gerado pelo html5-qrcode
+        // Conecta o ScannerVisual ao elemento de vídeo gerado pelo html5-qrcode
         const video  = document.querySelector("#reader video")
         const canvas = document.getElementById("scannerCanvas")
+
         if (video && canvas) {
             ScannerVisual.init(video, canvas)
+            // Tenta ativar foco/exposição contínuos após o vídeo estar pronto
+            _aplicarConstraintsAvancados(video)
         }
 
         if (wrap)  wrap.classList.add("ativo")
@@ -465,24 +619,24 @@ async function iniciarCamera() {
         Notif.sucesso("Câmera ativa", "Aponte o QR Code do aluno para a câmera.")
 
     } catch (err) {
-        if (statusEl) {
-            statusEl.className = "scanner-status erro"
-            if (err.name === "NotAllowedError")
-                statusEl.textContent = "❌ Permissão negada. Habilite a câmera nas configurações."
-            else if (err.name === "NotFoundError")
-                statusEl.textContent = "❌ Câmera não encontrada."
-            else
-                statusEl.textContent = "❌ " + (err.message || "Erro desconhecido.")
-
-            Notif.erro("Erro na câmera", statusEl.textContent.replace("❌ ", ""))
-        }
         btn.disabled = false
+
+        if (!statusEl) return
+
+        let mensagem
+        if (err.name === "NotAllowedError") {
+            mensagem = "❌ Permissão negada. Habilite a câmera nas configurações."
+        } else if (err.name === "NotFoundError") {
+            mensagem = "❌ Câmera não encontrada."
+        } else {
+            mensagem = "❌ " + (err.message || "Erro desconhecido ao acessar a câmera.")
+        }
+
+        statusEl.className   = "scanner-status erro"
+        statusEl.textContent = mensagem
+        Notif.erro("Erro na câmera", mensagem.replace("❌ ", ""))
     }
 }
-
-// ===================== EXPORT =====================
-// Exporta carregarPresencas para uso em _limparPresencasTurnoAnterior
-// (referência circular necessária — mantida intencional)
 
 // ===================== HELPERS =====================
 function _escHtml(str) {
@@ -502,19 +656,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     setInterval(_verificarTrocaTurno, 60 * 1000)
 
-    // Botão da câmera
     const btnCamera = document.getElementById("btnStartCamera")
     if (btnCamera) btnCamera.onclick = iniciarCamera
 
-    // Botão exportar
     const btnExportar = document.getElementById("btnExportar")
     if (btnExportar) btnExportar.onclick = gerarRelatorioPresencas
 
-    // Botão atualizar lista
     const btnRefresh = document.getElementById("btnRefresh")
     if (btnRefresh) btnRefresh.onclick = carregarPresencas
 
-    // Modal: fechar ao clicar fora ou no botão
     const overlay = document.getElementById("modalOverlay")
     if (overlay) overlay.addEventListener("click", e => {
         if (e.target.id === "modalOverlay") _fecharModal()
